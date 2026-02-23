@@ -6,7 +6,37 @@ DB_USER_ACTUAL="${DB_USER:-hotcrp}"
 DB_PASS_ACTUAL="${DB_PASSWORD:-hotcrp_secure_password}"
 DB_NAME_ACTUAL="${DB_NAME:-hotcrp_db}"
 
-# Đợi port 3306 mở (TCP check, không cần auth)
+# ─── Mailjet SMTP via msmtp ───────────────────────────────────────────────────
+# Required env vars: MAILJET_API_KEY, MAILJET_SECRET_KEY, MAIL_FROM
+if [ -n "${MAILJET_API_KEY}" ] && [ -n "${MAILJET_SECRET_KEY}" ]; then
+    echo "Configuring msmtp for Mailjet..."
+    cat > /etc/msmtprc <<EOF
+defaults
+auth           on
+tls            on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile        /var/log/msmtp.log
+
+account        mailjet
+host           in-v3.mailjet.com
+port           587
+from           ${MAIL_FROM:-noreply@example.com}
+user           ${MAILJET_API_KEY}
+password       ${MAILJET_SECRET_KEY}
+
+account default : mailjet
+EOF
+    chmod 600 /etc/msmtprc
+
+    # Point PHP's mail() to msmtp
+    echo "sendmail_path = /usr/bin/msmtp -t --read-envelope-from" \
+        > /usr/local/etc/php/conf.d/mail.ini
+    echo "Mailjet SMTP configured."
+else
+    echo "WARNING: MAILJET_API_KEY or MAILJET_SECRET_KEY not set. Email will not work."
+fi
+
+# ─── Wait for database port ───────────────────────────────────────────────────
 echo "Waiting for database port to be open..."
 max_tries=30
 count=0
@@ -22,26 +52,39 @@ done
 echo "Database port is open! Waiting 5 more seconds for MariaDB to fully initialize..."
 sleep 5
 
+# ─── Create conf/options.php ──────────────────────────────────────────────────
 mkdir -p conf
 
 if [ ! -f conf/options.php ]; then
     echo "Creating conf/options.php from environment variables..."
-    cat <<EOF > conf/options.php
+    cat > conf/options.php <<EOF
 <?php
 global \$Opt;
-\$Opt["dbName"] = "${DB_NAME_ACTUAL}";
-\$Opt["dbUser"] = "${DB_USER_ACTUAL}";
+\$Opt["dbName"]     = "${DB_NAME_ACTUAL}";
+\$Opt["dbUser"]     = "${DB_USER_ACTUAL}";
 \$Opt["dbPassword"] = "${DB_PASS_ACTUAL}";
-\$Opt["dbHost"] = "${DB_HOST_ACTUAL}";
+\$Opt["dbHost"]     = "${DB_HOST_ACTUAL}";
 EOF
+
+    # Optional: set the public site URL (needed for email links)
+    if [ -n "${HOTCRP_SITE_URL}" ]; then
+        echo "\$Opt[\"paperSite\"] = \"${HOTCRP_SITE_URL}\";" >> conf/options.php
+    fi
+
+    # Optional: set the From address shown in emails
+    if [ -n "${MAIL_FROM}" ]; then
+        echo "\$Opt[\"emailFrom\"] = \"${MAIL_FROM}\";" >> conf/options.php
+    fi
+
     chown www-data:www-data conf/options.php
 fi
 
+# ─── Uploads directory ────────────────────────────────────────────────────────
 mkdir -p uploads
 chown -R www-data:www-data uploads
 chmod -R 755 uploads
 
-# Khởi tạo schema nếu chưa có bảng
+# ─── Import DB schema if needed ──────────────────────────────────────────────
 TABLE_CHECK=$(mysql --skip-ssl -h"${DB_HOST_ACTUAL}" -u"${DB_USER_ACTUAL}" --password="${DB_PASS_ACTUAL}" "${DB_NAME_ACTUAL}" -e "SHOW TABLES LIKE 'Settings';" 2>/dev/null | wc -l)
 if [ "$TABLE_CHECK" -gt 1 ]; then
     echo "Database tables already exist, skipping schema import."

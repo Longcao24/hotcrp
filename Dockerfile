@@ -7,8 +7,10 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     poppler-utils \
-    sendmail \
+    msmtp \
+    msmtp-mta \
     mariadb-client \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Cài đặt các PHP extensions yêu cầu bởi HotCRP
