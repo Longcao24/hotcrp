@@ -2,7 +2,10 @@
 set -e
 
 # Đợi DB sẵn sàng
-sleep 10
+sleep 15
+
+# Đảm bảo thư mục conf tồn tại
+mkdir -p conf
 
 # Tạo cấu hình options.php động từ biến môi trường
 if [ ! -f conf/options.php ]; then
@@ -17,6 +20,11 @@ global \$Opt;
 EOF
     chown www-data:www-data conf/options.php
 fi
+
+# Thiết lập thư mục quyền truy cập cho upload
+mkdir -p uploads
+chown -R www-data:www-data uploads
+chmod -R 755 uploads
 
 # Chạy script tạo cấu trúc bảng nếu db trống
 if mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" -p"${DB_PASSWORD:-hotcrp_secure_password}" "${DB_NAME:-hotcrp_db}" -e "SHOW TABLES;" 2>/dev/null | grep -q "Settings"; then
