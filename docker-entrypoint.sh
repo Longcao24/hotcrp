@@ -5,7 +5,7 @@ set -e
 echo "Waiting for database to be ready..."
 max_tries=30
 count=0
-while ! mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" -p"${DB_PASSWORD:-hotcrp_secure_password}" -e "SELECT 1;" >/dev/null 2>&1; do
+while ! mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" --password="${DB_PASSWORD:-hotcrp_secure_password}" --protocol=TCP -e "SELECT 1;" >/dev/null 2>&1; do
     count=$((count+1))
     if [ $count -gt $max_tries ]; then
         echo "Error: Database is not ready after 60 seconds."
@@ -35,11 +35,11 @@ mkdir -p uploads
 chown -R www-data:www-data uploads
 chmod -R 755 uploads
 
-if mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" -p"${DB_PASSWORD:-hotcrp_secure_password}" "${DB_NAME:-hotcrp_db}" -e "SHOW TABLES;" 2>/dev/null | grep -q "Settings"; then
+if mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" --password="${DB_PASSWORD:-hotcrp_secure_password}" --protocol=TCP "${DB_NAME:-hotcrp_db}" -e "SHOW TABLES;" 2>/dev/null | grep -q "Settings"; then
     echo "Database tables already exist."
 else
     echo "Initializing database tables..."
-    mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" -p"${DB_PASSWORD:-hotcrp_secure_password}" "${DB_NAME:-hotcrp_db}" < src/schema.sql || true
+    mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" --password="${DB_PASSWORD:-hotcrp_secure_password}" --protocol=TCP "${DB_NAME:-hotcrp_db}" < src/schema.sql || true
 fi
 
 exec apache2-foreground
