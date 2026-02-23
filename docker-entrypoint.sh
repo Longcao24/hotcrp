@@ -1,20 +1,26 @@
 #!/bin/bash
 set -e
 
-# Đợi DB sẵn sàng một cách chắc chắn thay vì sleep tĩnh
-echo "Waiting for database to be ready..."
+DB_HOST_ACTUAL="${DB_HOST:-hotcrp-db}"
+DB_USER_ACTUAL="${DB_USER:-hotcrp}"
+DB_PASS_ACTUAL="${DB_PASSWORD:-hotcrp_secure_password}"
+DB_NAME_ACTUAL="${DB_NAME:-hotcrp_db}"
+
+# Đợi port 3306 mở (TCP check, không cần auth)
+echo "Waiting for database port to be open..."
 max_tries=30
 count=0
-while ! mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" --password="${DB_PASSWORD:-hotcrp_secure_password}" --protocol=TCP -e "SELECT 1;" >/dev/null 2>&1; do
+until bash -c "echo > /dev/tcp/${DB_HOST_ACTUAL}/3306" 2>/dev/null; do
     count=$((count+1))
     if [ $count -gt $max_tries ]; then
-        echo "Error: Database is not ready after 60 seconds."
+        echo "Error: Database port not reachable after 60 seconds."
         exit 1
     fi
-    echo "Database is unavailable - sleeping 2s (Attempt $count/$max_tries)..."
+    echo "Port not ready - sleeping 2s (Attempt $count/$max_tries)..."
     sleep 2
 done
-echo "Database is up and running!"
+echo "Database port is open! Waiting 5 more seconds for MariaDB to fully initialize..."
+sleep 5
 
 mkdir -p conf
 
@@ -23,10 +29,10 @@ if [ ! -f conf/options.php ]; then
     cat <<EOF > conf/options.php
 <?php
 global \$Opt;
-\$Opt["dbName"] = getenv("DB_NAME") ?: "hotcrp_db";
-\$Opt["dbUser"] = getenv("DB_USER") ?: "hotcrp";
-\$Opt["dbPassword"] = getenv("DB_PASSWORD") ?: "hotcrp_secure_password";
-\$Opt["dbHost"] = getenv("DB_HOST") ?: "hotcrp-db";
+\$Opt["dbName"] = "${DB_NAME_ACTUAL}";
+\$Opt["dbUser"] = "${DB_USER_ACTUAL}";
+\$Opt["dbPassword"] = "${DB_PASS_ACTUAL}";
+\$Opt["dbHost"] = "${DB_HOST_ACTUAL}";
 EOF
     chown www-data:www-data conf/options.php
 fi
@@ -35,11 +41,14 @@ mkdir -p uploads
 chown -R www-data:www-data uploads
 chmod -R 755 uploads
 
-if mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" --password="${DB_PASSWORD:-hotcrp_secure_password}" --protocol=TCP "${DB_NAME:-hotcrp_db}" -e "SHOW TABLES;" 2>/dev/null | grep -q "Settings"; then
-    echo "Database tables already exist."
+# Khởi tạo schema nếu chưa có bảng
+TABLE_CHECK=$(mysql --skip-ssl -h"${DB_HOST_ACTUAL}" -u"${DB_USER_ACTUAL}" --password="${DB_PASS_ACTUAL}" "${DB_NAME_ACTUAL}" -e "SHOW TABLES LIKE 'Settings';" 2>/dev/null | wc -l)
+if [ "$TABLE_CHECK" -gt 1 ]; then
+    echo "Database tables already exist, skipping schema import."
 else
-    echo "Initializing database tables..."
-    mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" --password="${DB_PASSWORD:-hotcrp_secure_password}" --protocol=TCP "${DB_NAME:-hotcrp_db}" < src/schema.sql || true
+    echo "Initializing database tables from schema.sql..."
+    mysql --skip-ssl -h"${DB_HOST_ACTUAL}" -u"${DB_USER_ACTUAL}" --password="${DB_PASS_ACTUAL}" "${DB_NAME_ACTUAL}" < src/schema.sql
+    echo "Schema imported successfully."
 fi
 
 exec apache2-foreground
