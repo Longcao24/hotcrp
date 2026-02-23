@@ -1,13 +1,23 @@
 #!/bin/bash
 set -e
 
-# Đợi DB sẵn sàng
-sleep 15
+# Đợi DB sẵn sàng một cách chắc chắn thay vì sleep tĩnh
+echo "Waiting for database to be ready..."
+max_tries=30
+count=0
+while ! mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" -p"${DB_PASSWORD:-hotcrp_secure_password}" -e "SELECT 1;" >/dev/null 2>&1; do
+    count=$((count+1))
+    if [ $count -gt $max_tries ]; then
+        echo "Error: Database is not ready after 60 seconds."
+        exit 1
+    fi
+    echo "Database is unavailable - sleeping 2s (Attempt $count/$max_tries)..."
+    sleep 2
+done
+echo "Database is up and running!"
 
-# Đảm bảo thư mục conf tồn tại
 mkdir -p conf
 
-# Tạo cấu hình options.php động từ biến môi trường
 if [ ! -f conf/options.php ]; then
     echo "Creating conf/options.php from environment variables..."
     cat <<EOF > conf/options.php
@@ -21,12 +31,10 @@ EOF
     chown www-data:www-data conf/options.php
 fi
 
-# Thiết lập thư mục quyền truy cập cho upload
 mkdir -p uploads
 chown -R www-data:www-data uploads
 chmod -R 755 uploads
 
-# Chạy script tạo cấu trúc bảng nếu db trống
 if mysql -h"${DB_HOST:-hotcrp-db}" -u"${DB_USER:-hotcrp}" -p"${DB_PASSWORD:-hotcrp_secure_password}" "${DB_NAME:-hotcrp_db}" -e "SHOW TABLES;" 2>/dev/null | grep -q "Settings"; then
     echo "Database tables already exist."
 else
