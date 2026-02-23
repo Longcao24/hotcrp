@@ -1,0 +1,80 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master, github ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php-versions: ['7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5']
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Start mysql
+      run: |
+        (echo '[mysqld]'; echo 'default-authentication-plugin=mysql_native_password') | sudo sh -c "cat > /etc/mysql/conf.d/nativepassword.cnf"
+        sudo systemctl start mysql
+        mysql -V
+
+    - name: Prepare the application
+      run: |
+        sudo lib/createdb.sh -u root -proot -c test/options.php --batch
+        sudo lib/createdb.sh -u root -proot -c test/cdb-options.php --no-dbuser --batch
+
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-versions }}
+        extensions: mbstring, intl, mysqlnd
+
+    - name: Install poppler
+      run: |
+        sudo apt-get --fix-broken install
+        sudo apt-get install poppler-utils || ( sudo apt-get update && sudo apt-get install poppler-utils )
+
+    - name: Run tests
+      run: sh test/check.sh --all
+
+  build-22:
+    runs-on: ubuntu-22.04
+
+    strategy:
+      matrix:
+        php-versions: ['7.3', '8.0']
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Start mysql
+      run: |
+        (echo '[mysqld]'; echo 'default-authentication-plugin=mysql_native_password') | sudo sh -c "cat > /etc/mysql/conf.d/nativepassword.cnf"
+        sudo /etc/init.d/mysql start
+        mysql -V
+
+    - name: Prepare the application
+      run: |
+        sudo lib/createdb.sh -u root -proot -c test/options.php --batch
+        sudo lib/createdb.sh -u root -proot -c test/cdb-options.php --no-dbuser --batch
+
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-versions }}
+        extensions: mbstring, intl, mysqlnd
+
+    - name: Install poppler
+      run: |
+        sudo apt-get update
+        sudo apt-get --fix-missing install poppler-utils
+
+    - name: Run tests
+      run: sh test/check.sh --all

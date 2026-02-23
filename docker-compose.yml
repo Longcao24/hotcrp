@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  hotcrp-app:
+    build: .
+    # Coolify sử dụng reverse proxy đằng trước nên chỉ cần expose 80 cho Coolify biết
+    expose:
+      - "80"
+    environment:
+      - DB_HOST=hotcrp-db
+      - DB_USER=hotcrp
+      - DB_PASSWORD=${DB_PASSWORD:-hotcrp_secure_password}
+      - DB_NAME=hotcrp_db
+    depends_on:
+      - hotcrp-db
+    restart: unless-stopped
+    # Không dùng bind mount source code (.) để code trong Docker image được thực thi trên Coolify
+
+  hotcrp-db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_secure_password}
+      MARIADB_DATABASE: hotcrp_db
+      MARIADB_USER: hotcrp
+      MARIADB_PASSWORD: ${DB_PASSWORD:-hotcrp_secure_password}
+    volumes:
+      - hotcrp_db_data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  hotcrp_db_data:
