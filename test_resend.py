@@ -6,7 +6,7 @@ import urllib.error
 import json
 
 # ── Config ────────────────────────────────────────────────────────────────────
-API_KEY    = "re_5ZNNg3Tb_LeaDq66emHMcucaNxcv42wcT"
+API_KEY    = "_"
 FROM_EMAIL = "noreply@m.auspexmedix.com"
 TO_EMAIL   = "longh1686@gmail.com"
 # ─────────────────────────────────────────────────────────────────────────────

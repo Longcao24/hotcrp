@@ -307,7 +307,7 @@ class MailPreparation implements JsonSerializable {
             }
             unset($headers["subject"]);
             $htext = substr(join("", $headers), 0, -2);
-            return ($this->sent = mail($to, $this->subject, $qpe_body, $htext, $extra));
+            return ($this->sent = mail($to, $this->subject, $qpe_body, $htext, $extra ?? ""));
         }
 
         // print email if debugging (and pretend email was successfully sent)

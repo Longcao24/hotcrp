@@ -26,7 +26,7 @@ password       ${RESEND_API_KEY}
 
 account default : resend
 EOF
-    chmod 600 /etc/msmtprc
+    chmod 644 /etc/msmtprc
 
     # Point PHP's mail() to msmtp
     echo "sendmail_path = /usr/bin/msmtp -t --read-envelope-from" \
