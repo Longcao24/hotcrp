@@ -63,6 +63,7 @@ global \$Opt;
 \$Opt["dbUser"]     = "${DB_USER_ACTUAL}";
 \$Opt["dbPassword"] = "${DB_PASS_ACTUAL}";
 \$Opt["dbHost"]     = "${DB_HOST_ACTUAL}";
+\$Opt["sendEmail"]  = true;
 OPTEOF
 
 if [ -n "${MAIL_FROM}" ]; then
