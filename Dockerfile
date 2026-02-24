@@ -19,17 +19,8 @@ RUN docker-php-ext-install intl zip mysqli pdo pdo_mysql
 # Enable Apache modules
 RUN a2enmod rewrite headers
 
-# Fix HTTPS behind reverse proxy (Coolify): correct SERVER_PORT so HotCRP
-# doesn't generate URLs like https://host:80/
-RUN echo '<VirtualHost *:80>\n\
-    SetEnvIf X-Forwarded-Proto https HTTPS=on\n\
-    SetEnvIf X-Forwarded-Proto https SERVER_PORT=443\n\
-    DocumentRoot /var/www/html\n\
-    <Directory /var/www/html>\n\
-        AllowOverride All\n\
-        Require all granted\n\
-    </Directory>\n\
-</VirtualHost>' > /etc/apache2/sites-available/000-default.conf
+# Trust Coolify's reverse-proxy headers (fixes https://host:80/ URLs)
+COPY apache-hotcrp.conf /etc/apache2/sites-available/000-default.conf
 
 # Cấu hình PHP theo khuyến nghị của HotCRP
 RUN echo "upload_max_filesize = 15M\n\
