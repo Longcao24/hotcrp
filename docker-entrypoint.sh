@@ -52,37 +52,28 @@ done
 echo "Database port is open! Waiting 5 more seconds for MariaDB to fully initialize..."
 sleep 5
 
-# ─── Create or update conf/options.php ───────────────────────────────────────
+# ─── Always regenerate conf/options.php from env vars ────────────────────────
 mkdir -p conf
 
-if [ ! -f conf/options.php ]; then
-    echo "Creating conf/options.php..."
-    cat > conf/options.php <<EOF
+echo "Writing conf/options.php..."
+cat > conf/options.php <<OPTEOF
 <?php
 global \$Opt;
 \$Opt["dbName"]     = "${DB_NAME_ACTUAL}";
 \$Opt["dbUser"]     = "${DB_USER_ACTUAL}";
 \$Opt["dbPassword"] = "${DB_PASS_ACTUAL}";
 \$Opt["dbHost"]     = "${DB_HOST_ACTUAL}";
-EOF
-    chown www-data:www-data conf/options.php
+OPTEOF
+
+if [ -n "${MAIL_FROM}" ]; then
+    echo "\$Opt[\"emailFrom\"] = \"${MAIL_FROM}\";" >> conf/options.php
+fi
+if [ -n "${HOTCRP_SITE_URL}" ]; then
+    echo "\$Opt[\"paperSite\"] = \"${HOTCRP_SITE_URL}\";" >> conf/options.php
 fi
 
-# Always ensure email settings are present/updated (not just on first create)
-php -r "
-\$f = 'conf/options.php';
-\$c = file_get_contents(\$f);
-function upsert_opt(\$key, \$val, \$src) {
-    if (strpos(\$src, \"\\\\\$Opt[\\\"\$key\\\"\") !== false) {
-        return preg_replace('/\\\\\\\$Opt\\\\\[\"' . preg_quote(\$key, '/') . '\"\\\\]\s*=\s*\"[^\"]*\";/', \"\\\\\\\$Opt[\\\"{\$key}\\\"] = \\\"{\$val}\\\";\", \$src);
-    }
-    return rtrim(\$src) . \"\n\\\\\$Opt[\\\"\$key\\\"] = \\\"{\$val}\\\";\n\";
-}
-if (getenv('MAIL_FROM'))         \$c = upsert_opt('emailFrom',  getenv('MAIL_FROM'), \$c);
-if (getenv('HOTCRP_SITE_URL'))   \$c = upsert_opt('paperSite',  getenv('HOTCRP_SITE_URL'), \$c);
-file_put_contents(\$f, \$c);
-echo 'options.php email settings updated.' . PHP_EOL;
-"
+chown www-data:www-data conf/options.php
+echo "conf/options.php written."
 
 # ─── Uploads directory ────────────────────────────────────────────────────────
 mkdir -p uploads
