@@ -6,10 +6,10 @@ DB_USER_ACTUAL="${DB_USER:-hotcrp}"
 DB_PASS_ACTUAL="${DB_PASSWORD:-hotcrp_secure_password}"
 DB_NAME_ACTUAL="${DB_NAME:-hotcrp_db}"
 
-# ─── Mailjet SMTP via msmtp ───────────────────────────────────────────────────
-# Required env vars: MAILJET_API_KEY, MAILJET_SECRET_KEY, MAIL_FROM
-if [ -n "${MAILJET_API_KEY}" ] && [ -n "${MAILJET_SECRET_KEY}" ]; then
-    echo "Configuring msmtp for Mailjet..."
+# ─── Resend SMTP via msmtp ────────────────────────────────────────────────────
+# Required env vars: RESEND_API_KEY, MAIL_FROM
+if [ -n "${RESEND_API_KEY}" ]; then
+    echo "Configuring msmtp for Resend..."
     cat > /etc/msmtprc <<EOF
 defaults
 auth           on
@@ -17,23 +17,23 @@ tls            on
 tls_trust_file /etc/ssl/certs/ca-certificates.crt
 logfile        /var/log/msmtp.log
 
-account        mailjet
-host           in-v3.mailjet.com
+account        resend
+host           smtp.resend.com
 port           587
 from           ${MAIL_FROM:-noreply@example.com}
-user           ${MAILJET_API_KEY}
-password       ${MAILJET_SECRET_KEY}
+user           resend
+password       ${RESEND_API_KEY}
 
-account default : mailjet
+account default : resend
 EOF
     chmod 600 /etc/msmtprc
 
     # Point PHP's mail() to msmtp
     echo "sendmail_path = /usr/bin/msmtp -t --read-envelope-from" \
         > /usr/local/etc/php/conf.d/mail.ini
-    echo "Mailjet SMTP configured."
+    echo "Resend SMTP configured."
 else
-    echo "WARNING: MAILJET_API_KEY or MAILJET_SECRET_KEY not set. Email will not work."
+    echo "WARNING: RESEND_API_KEY not set. Email will not work."
 fi
 
 # ─── Wait for database port ───────────────────────────────────────────────────
@@ -52,11 +52,11 @@ done
 echo "Database port is open! Waiting 5 more seconds for MariaDB to fully initialize..."
 sleep 5
 
-# ─── Create conf/options.php ──────────────────────────────────────────────────
+# ─── Create or update conf/options.php ───────────────────────────────────────
 mkdir -p conf
 
 if [ ! -f conf/options.php ]; then
-    echo "Creating conf/options.php from environment variables..."
+    echo "Creating conf/options.php..."
     cat > conf/options.php <<EOF
 <?php
 global \$Opt;
@@ -65,19 +65,24 @@ global \$Opt;
 \$Opt["dbPassword"] = "${DB_PASS_ACTUAL}";
 \$Opt["dbHost"]     = "${DB_HOST_ACTUAL}";
 EOF
-
-    # Optional: set the public site URL (needed for email links)
-    if [ -n "${HOTCRP_SITE_URL}" ]; then
-        echo "\$Opt[\"paperSite\"] = \"${HOTCRP_SITE_URL}\";" >> conf/options.php
-    fi
-
-    # Optional: set the From address shown in emails
-    if [ -n "${MAIL_FROM}" ]; then
-        echo "\$Opt[\"emailFrom\"] = \"${MAIL_FROM}\";" >> conf/options.php
-    fi
-
     chown www-data:www-data conf/options.php
 fi
+
+# Always ensure email settings are present/updated (not just on first create)
+php -r "
+\$f = 'conf/options.php';
+\$c = file_get_contents(\$f);
+function upsert_opt(\$key, \$val, \$src) {
+    if (strpos(\$src, \"\\\\\$Opt[\\\"\$key\\\"\") !== false) {
+        return preg_replace('/\\\\\\\$Opt\\\\\[\"' . preg_quote(\$key, '/') . '\"\\\\]\s*=\s*\"[^\"]*\";/', \"\\\\\\\$Opt[\\\"{\$key}\\\"] = \\\"{\$val}\\\";\", \$src);
+    }
+    return rtrim(\$src) . \"\n\\\\\$Opt[\\\"\$key\\\"] = \\\"{\$val}\\\";\n\";
+}
+if (getenv('MAIL_FROM'))         \$c = upsert_opt('emailFrom',  getenv('MAIL_FROM'), \$c);
+if (getenv('HOTCRP_SITE_URL'))   \$c = upsert_opt('paperSite',  getenv('HOTCRP_SITE_URL'), \$c);
+file_put_contents(\$f, \$c);
+echo 'options.php email settings updated.' . PHP_EOL;
+"
 
 # ─── Uploads directory ────────────────────────────────────────────────────────
 mkdir -p uploads
