@@ -50,10 +50,11 @@ class NavigationState {
         $nav = new NavigationState;
 
         // protocol, host, server
+        $proxied_proto = ($server["HTTP_X_FORWARDED_PROTO"] ?? null);
         if ((isset($server["HTTPS"])
              && $server["HTTPS"] !== ""
              && $server["HTTPS"] !== "off")
-            || ($server["HTTP_X_FORWARDED_PROTO"] ?? null) === "https"
+            || $proxied_proto === "https"
             || ($server["REQUEST_SCHEME"] ?? null) === "https") {
             $nav->protocol = "https://";
             $plen = 8;
@@ -69,8 +70,12 @@ class NavigationState {
         $colon = strpos($srv, ":", $plen);
         if ($colon === false) {
             $colon = strlen($srv);
-            if (($port = $server["SERVER_PORT"])
-                && $port != $xport) {
+            // When behind a reverse proxy ($proxied_proto is set), SERVER_PORT
+            // is the internal port — do NOT expose it in URLs.
+            // Use X-Forwarded-Port only if the proxy explicitly sends it.
+            $port = $server["HTTP_X_FORWARDED_PORT"]
+                ?? ($proxied_proto !== null ? null : ($server["SERVER_PORT"] ?? null));
+            if ($port && $port != $xport) {
                 $srv .= ":" . $port;
             }
         }
